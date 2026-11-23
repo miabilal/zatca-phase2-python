@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}{{ inv.number }} · Fatoora Demo{% endblock %}
+{% block style %}
+.layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.receipt { padding: 28px; }
+.r-head { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.r-head .seller { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.r-head .doc { text-align: right; }
+.r-head .doc .t { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 700; }
+.r-head .doc .no { font-size: 20px; font-weight: 700; }
+.meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 18px 0;
+  border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.meta .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.lines th, .lines td { padding: 10px 0; }
+.lines th + th, .lines td + td { padding-left: 12px; }
+.bottom { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; flex-wrap: wrap;
+  padding-top: 18px; border-top: 1px solid var(--border); }
+.qr { text-align: center; }
+.qr svg { display: block; width: 168px; height: auto; border-radius: 6px; }
+.qr .c { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.totals { min-width: 260px; font-variant-numeric: tabular-nums; }
+.totals div { display: flex; justify-content: space-between; gap: 24px; padding: 4px 0; }
+.totals .grand { font-size: 18px; font-weight: 700; border-top: 1px solid var(--border); margin-top: 6px; padding-top: 10px; }
+.side .card + .card { margin-top: 16px; }
+.big-status { display: flex; align-items: center; gap: 12px; }
+.big-status .icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; }
+.icon.ok { background: var(--ok-bg); color: var(--ok); }
+.icon.warn { background: var(--warn-bg); color: var(--warn); }
+.icon.bad { background: var(--bad-bg); color: var(--bad); }
+.msg { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 12px; }
+.msg.warn { background: var(--warn-bg); color: var(--warn); }
+.msg.bad { background: var(--bad-bg); color: var(--bad); }
+.msg.info { background: var(--chip); color: var(--muted); }
+dl.tech { margin: 0; display: grid; gap: 10px; }
+dl.tech dt { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+dl.tech dd { margin: 0; }
+.dl { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } .meta { grid-template-columns: 1fr 1fr; }
+  .receipt { padding: 18px; } .r-head .doc { text-align: left; } }
+@media print { header.top, .side, .back { display: none; } .layout { display: block; } .card { border: 0; box-shadow: none; } }
+{% endblock %}
+{% block content %}
+<p class="back"><a href="{{ url_for('dashboard') }}">← Invoices</a></p>
+<div class="layout">
+
+  <article class="card receipt">
+    <div class="r-head">
+      <div>
+        <div class="seller">{{ inv.seller.name }}</div>
+        <div class="muted" style="font-size:13.5px">{{ inv.seller.address }}</div>
+        <div style="font-size:13.5px">VAT {{ inv.seller.vat }} · {{ inv.seller.id_scheme }} {{ inv.seller.id_value }}</div>
+      </div>
+      <div class="doc">
+        <div class="t">{{ "Simplified tax invoice" if inv.kind.startswith("Simplified") and not inv.is_note else ("Tax invoice" if not inv.is_note else inv.doc_type) }}</div>
+        <div class="no">{{ inv.number }}</div>
+        <div class="muted" style="font-size:13.5px">{{ inv.issued }}</div>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div><div class="k">Bill to</div>
+        <b>{{ inv.buyer.name if inv.buyer and inv.buyer.name else "Walk-in customer" }}</b>
+        {% if inv.buyer and inv.buyer.vat %}<div>VAT {{ inv.buyer.vat }}</div>{% endif %}
+        {% if inv.buyer and inv.buyer.address %}<div class="muted">{{ inv.buyer.address }}</div>{% endif %}
+      </div>
+      <div><div class="k">Payment</div>{{ inv.payment | capitalize }}
+        {% if inv.supply_date %}<div class="k" style="margin-top:8px">Supply date</div>{{ inv.supply_date }}{% endif %}
+      </div>
+      <div><div class="k">Type</div>{{ inv.kind }}
+        {% if inv.billing_reference %}<div class="k" style="margin-top:8px">Against invoice</div>{{ inv.billing_reference }}{% endif %}
+      </div>
+    </div>
+    {% if inv.reason %}<div class="msg info">Reason: {{ inv.reason }}</div>{% endif %}
+
+    <div class="table-scroll">
+    <table class="lines">
+      <thead><tr><th>Item</th><th class="num">Qty</th><th class="num hide-sm">Price</th><th class="num hide-sm">Discount</th>
+        <th class="num">VAT</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+      {% for l in inv.lines %}
+        <tr>
+          <td><b>{{ l.name }}</b>{% if l.vat_code != "S" %}<div class="muted" style="font-size:12px">{{ {"E": "VAT exempt", "Z": "Zero-rated", "O": "Outside VAT scope"}[l.vat_code] }}</div>{% endif %}</td>
+          <td class="num">{{ l.qty }}</td>
+          <td class="num hide-sm">{{ l.price }}</td>
+          <td class="num hide-sm">{{ ("−" ~ l.discount) if l.discount else "—" }}</td>
+          <td class="num">{{ l.vat }} <span class="muted" style="font-size:12px">({{ l.vat_rate | float | round | int }}%)</span></td>
+          <td class="num"><b>{{ l.total }}</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    <div class="bottom">
+      {% if qr_svg %}
+        <div class="qr">{{ qr_svg | safe }}<div class="c">Scan with the ZATCA app</div></div>
+      {% endif %}
+      <div class="totals">
+        <div><span class="muted">Subtotal</span><span>{{ inv.totals.line_extension }}</span></div>
+        {% for a in inv.allowances %}
+          <div><span class="muted">{{ a.reason | capitalize }}</span><span>−{{ a.amount }}</span></div>
+        {% endfor %}
+        <div><span class="muted">Total excl. VAT</span><span>{{ inv.totals.tax_exclusive }}</span></div>
+        {% for s in inv.subtotals %}
+          <div><span class="muted">VAT {{ s.rate | float | round | int }}% on {{ s.taxable }}{% if s.reason_code %} ({{ s.reason_code }}){% endif %}</span><span>{{ s.tax }}</span></div>
+        {% endfor %}
+        <div class="grand"><span>Total</span><span>{{ inv.totals.payable }} {{ inv.currency }}</span></div>
+      </div>
+    </div>
+  </article>
+
+  <aside class="side">
+    {% set label, tone = STATUS[r.status] %}
+    <div class="card pad">
+      <div class="big-status">
+        <div class="icon {{ tone }}">{{ "✓" if tone == "ok" else ("!" if tone == "bad" else "…") }}</div>
+        <div><b style="font-size:16px">{{ label }}</b>
+          <div class="muted" style="font-size:13px">
+            {% if r.status == "CLEARED" %}ZATCA stamped this invoice. The buyer receives this cleared copy.
+            {% elif r.status == "REPORTED" %}Reported within the 24-hour limit. The customer already has it.
+            {% elif r.status == "PENDING" %}Will be retried automatically ({{ r.attempts }} attempt{{ "s" if r.attempts != 1 }} so far).
+            {% else %}Fix the data and issue a corrected document.{% endif %}
+          </div>
+        </div>
+      </div>
+      {% for w in r.warnings %}
+        {% if sandbox_cert_warning(w) %}
+          <div class="msg info"><b>Sandbox only:</b> ZATCA's test portal gives every developer the same sample
+            production certificate, so it can't match this device's key. In simulation and production this warning does not occur.</div>
+        {% else %}
+          <div class="msg warn">{{ w }}</div>
+        {% endif %}
+      {% endfor %}
+      {% if r.last_error %}<div class="msg {{ 'bad' if r.status == 'REJECTED' else 'warn' }}">{{ r.last_error }}</div>{% endif %}
+    </div>
+
+    <div class="card pad">
+      <h2>Behind the scenes</h2>
+      <dl class="tech">
+        <dt>Invoice counter (ICV)</dt><dd>{{ inv.icv }}</dd>
+        <dt>Invoice hash</dt><dd class="mono">{{ r.invoice_hash }}</dd>
+        <dt>Previous invoice hash (PIH)</dt><dd class="mono">{{ inv.pih }}</dd>
+        <dt>UUID</dt><dd class="mono">{{ inv.uuid }}</dd>
+        <dt>{{ "Stamped by" if r.cleared_xml else "Signed by" }}</dt><dd>{{ inv.cert_issuer }} · {{ inv.signing_time }}</dd>
+        <dt>QR code</dt><dd>{{ inv.qr_tags }} TLV tags{% if r.cleared_xml %} (generated by ZATCA){% endif %}</dd>
+      </dl>
+    </div>
+
+    <div class="card pad">
+      <h2>Files</h2>
+      <div class="dl">
+        <a class="btn" href="{{ url_for('invoice_xml', uuid=r.uuid, which='signed') }}">Signed XML</a>
+        {% if r.cleared_xml %}<a class="btn" href="{{ url_for('invoice_xml', uuid=r.uuid, which='cleared') }}">Cleared XML</a>{% endif %}
+        <button class="btn" onclick="print()">Print</button>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

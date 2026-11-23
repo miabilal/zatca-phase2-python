@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Compliance checks · Fatoora Demo{% endblock %}
+{% block content %}
+  <p><a href="{{ url_for('dashboard') }}">← Invoices</a></p>
+  <h1>Compliance checks</h1>
+  <p class="sub">ZATCA requires every document type to pass its validator before it issues a production certificate.
+    These 6 documents are chained exactly like real invoices.</p>
+  <div class="card table-scroll">
+    <table>
+      <thead><tr><th>Document</th><th>Type</th><th class="hide-sm">Contents</th><th class="num">Total (SAR)</th><th>ZATCA result</th></tr></thead>
+      <tbody>
+      {% for c in checks %}
+        {% set d = c.invoice %}
+        <tr>
+          <td><b>{{ d.number }}</b></td>
+          <td>{{ "Standard" if d.kind.name == "STANDARD" else "Simplified" }}
+            {{ {"INVOICE": "invoice", "CREDIT_NOTE": "credit note", "DEBIT_NOTE": "debit note"}[d.doc_type.name] }}</td>
+          <td class="hide-sm muted">{{ d.lines | map(attribute="name") | join(", ") }}{% if d.note_reason %} · “{{ d.note_reason }}”{% endif %}</td>
+          <td class="num">{{ d.totals().payable }}</td>
+          <td>
+            <span class="pill {{ 'ok' if c.ok else 'bad' }}"><span class="dot"></span>{{ "Passed" if c.ok else "Failed" }}</span>
+            <span class="muted" style="font-size:12.5px">{{ c.status.split(" / ")[1] | lower }}</span>
+            {% for m in c.messages %}<div class="muted" style="font-size:12.5px">{{ m }}</div>{% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

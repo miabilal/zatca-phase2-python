@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Invoices · Fatoora Demo{% endblock %}
+{% block style %}
+.setup { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: center; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.steps li { display: flex; gap: 12px; align-items: flex-start; }
+.steps b { display: block; }
+.steps .n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--chip);
+  display: grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--accent); }
+.device { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13.5px; margin-bottom: 20px; }
+.device b { color: var(--text); font-weight: 600; }
+@media (max-width: 760px) { .setup { grid-template-columns: 1fr; } }
+{% endblock %}
+{% block content %}
+
+{% if not egs %}
+  <h1>Connect this system to ZATCA</h1>
+  <p class="sub">One click runs the full Phase 2 onboarding against ZATCA's sandbox.</p>
+  <div class="card pad setup">
+    <ol class="steps">
+      <li><span class="n">1</span><div><b>Register the device</b>
+        <span class="muted">Create a secp256k1 key and certificate request, and receive a compliance certificate.</span></div></li>
+      <li><span class="n">2</span><div><b>Pass 6 compliance checks</b>
+        <span class="muted">Standard and simplified invoice, credit note and debit note, each validated by ZATCA.</span></div></li>
+      <li><span class="n">3</span><div><b>Receive the production certificate</b>
+        <span class="muted">Used to report and clear real invoices.</span></div></li>
+    </ol>
+    <div>
+      <form method="post" action="{{ url_for('setup') }}" data-busy="Talking to ZATCA…">
+        <button class="btn primary">{{ "Finish onboarding" if onboarded else "Connect to ZATCA sandbox" }}</button>
+      </form>
+      <p class="muted" style="font-size:13px;margin-top:10px">Takes about 10 seconds.</p>
+    </div>
+  </div>
+{% else %}
+  <h1>Invoices</h1>
+  <p class="sub">Every invoice is signed on this system, then reported (B2C) or cleared (B2B) by ZATCA.</p>
+
+  <div class="device">
+    <span>Seller <b>Demo Trading Co</b></span>
+    <span>VAT <b>399999999900003</b></span>
+    <span>Production certificate <b>valid to {{ egs.valid_to }}</b></span>
+  </div>
+
+  <div class="grid stats">
+    {% for key in ["REPORTED", "CLEARED", "PENDING", "REJECTED"] %}
+      <div class="card stat">
+        <div class="n">{{ counts[key] }}</div>
+        <div class="l"><span class="pill {{ STATUS[key][1] }}" style="padding:1px 8px"><span class="dot"></span>{{ STATUS[key][0] }}</span></div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="actions">
+    <form class="inline" method="post" action="{{ url_for('issue', kind='b2c') }}" data-busy="Reporting…">
+      <button class="btn primary">New B2C invoice</button></form>
+    <form class="inline" method="post" action="{{ url_for('issue', kind='b2b') }}" data-busy="Clearing…">
+      <button class="btn primary">New B2B invoice</button></form>
+    <span class="spacer"></span>
+    <form class="inline" method="post" action="{{ url_for('compliance') }}" data-busy="Running 6 checks…">
+      <button class="btn">Run compliance checks</button></form>
+    <form class="inline" method="post" action="{{ url_for('retry') }}" data-busy="Sending…">
+      <button class="btn">Send waiting invoices</button></form>
+  </div>
+
+  <div class="card table-scroll">
+    {% if rows %}
+    <table>
+      <thead><tr>
+        <th>Invoice</th><th class="hide-sm">Type</th><th class="hide-sm">Customer</th>
+        <th class="hide-sm">Issued</th><th class="num">Total (SAR)</th><th>ZATCA</th>
+      </tr></thead>
+      <tbody>
+      {% for x in rows %}
+        {% set r, inv = x.row, x.inv %}
+        <tr class="link" onclick="location.href='{{ url_for('invoice', uuid=r.uuid) }}'">
+          <td class="nowrap"><a href="{{ url_for('invoice', uuid=r.uuid) }}"><b>{{ r.number }}</b></a></td>
+          <td class="hide-sm">{{ inv.kind }}</td>
+          <td class="hide-sm">{{ inv.buyer.name if inv.buyer and inv.buyer.name else "—" }}</td>
+          <td class="hide-sm muted">{{ inv.issued }}</td>
+          <td class="num"><b>{{ inv.totals.payable }}</b></td>
+          <td><span class="pill {{ STATUS[r.status][1] }}"><span class="dot"></span>{{ STATUS[r.status][0] }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div class="empty">No invoices yet. Issue one above and ZATCA will answer in a second or two.</div>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

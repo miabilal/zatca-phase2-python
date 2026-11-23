@@ -1,0 +1,7 @@
+.venv/
+secrets/
+__pycache__/
+.pytest_cache/
+out/
+*.sqlite3
+.DS_Store
